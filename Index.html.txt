@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyper-Realistic Pīwakawaka</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-stone-50 text-stone-800 font-sans h-full min-h-screen pb-24 overflow-x-hidden">
+
+    <header class="bg-white shadow-sm sticky top-0 z-40 border-b border-stone-200">
+        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-emerald-800 tracking-tight">Aotearoa<span class="text-stone-400">Avian</span></h1>
+            <nav class="space-x-8 hidden md:block">
+                <a href="#" class="bird-perch text-stone-600 hover:text-emerald-700 font-medium transition">Forests</a>
+                <a href="#" class="bird-perch text-stone-600 hover:text-emerald-700 font-medium transition">Mountains</a>
+                <a href="#" class="bird-perch text-stone-600 hover:text-emerald-700 font-medium transition">Coasts</a>
+            </nav>
+            <button class="bird-perch bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-lg font-semibold shadow transition">
+                Donate Now
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-12 relative">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 mb-12 relative z-10">
+            <h2 class="text-lg font-bold mb-4 text-stone-800">Tree Hideaway Controls</h2>
+            <div class="flex flex-wrap gap-4 items-center">
+                <button id="hide-btn" class="bg-stone-900 hover:bg-stone-800 text-white px-6 py-3 rounded-lg font-medium shadow transition">
+                    Hide in Tree
+                </button>
+                <button id="show-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-lg font-medium shadow transition opacity-50 pointer-events-none">
+                    Emerge from Tree
+                </button>
+                <button id="scare-btn" class="ml-auto bg-stone-200 hover:bg-stone-300 text-stone-800 px-6 py-3 rounded-lg font-medium shadow transition">
+                    Shoo Bird!
+                </button>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-16">
+            <div class="space-y-6 relative z-10">
+                <h2 class="text-4xl font-extrabold text-stone-900 leading-tight">Perfect Placement.</h2>
+                <p class="text-stone-600 text-lg leading-relaxed">
+                    The perch offsets have been fine-tuned. The bird's claws now sit <em>exactly</em> on the top edge of branches and elements. It lands confidently on the outer edge of the branch, far from the trunk.
+                </p>
+                <p class="text-stone-600 text-lg leading-relaxed">
+                    Notice how during the jump into the hole, its body perfectly pitches up during the leap, and arcs down to dive gracefully into the opening.
+                </p>
+                <button class="bird-perch bg-emerald-100 hover:bg-emerald-200 text-emerald-900 px-8 py-4 rounded-xl font-bold shadow-sm transition inline-block">
+                    Vertical Cling Target
+                </button>
+            </div>
+            <div class="bg-stone-200 h-[400px] rounded-2xl flex items-center justify-center relative border border-stone-300 shadow-inner overflow-hidden">
+                <div class="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiM0ZDdkNGEiLz48L3N2Zz4=')]"></div>
+                <div class="bg-white p-8 rounded-xl shadow-lg border border-stone-100 text-center relative z-10">
+                    <h3 class="text-stone-800 font-bold text-2xl mb-2 bird-perch cursor-default">Target Box</h3>
+                    <p class="text-stone-500">The bird loves to land on the left or right edges of this box.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 
+      =======================================================================
+      ⬇️ PĪWAKAWAKA MASTER PLUGIN SCRIPT ⬇️
+      =======================================================================
+    -->
+    <script>
+        class PiwakawakaPlugin {
+            constructor(options = {}) {
+                this.perchSelector = options.perchSelector || '.bird-perch, nav a, button';
+                
+                this.state = 'flying'; 
+                this.x = window.innerWidth / 2;
+                this.y = window.innerHeight / 2;
+                this.vx = 0;
+                this.vy = 0;
+                this.targetX = this.x;
+                this.targetY = this.y;
+                
+                this.perchElement = null;
+                this.perchSide = 'top'; 
+                this.perchOffset = 0;
+                this.facingRight = true;
+                
+                this.isSequencing = false; 
+                this.isJumping = false;
+                this.jumpTime = 0;
+                this.jumpDuration = 0;
+                this.jumpStartX = 0; this.jumpStartY = 0;
+                this.jumpEndX = 0; this.jumpEndY = 0;
+                this.jumpHeight = 0;
+                this.currentVy = 0; // Used for parabolic pitch tracking
+                
+                this.flightTimer = 0;
+                this.dartTimer = 0;
+
+                this.injectStyles();
+                this.initDOM();
+                
+                this.startPlugin();
+                
+                this.lastTime = performance.now();
+                requestAnimationFrame(this.update.bind(this));
+
+                window.addEventListener('resize', () => {
+                    if (this.state !== 'hidden' && !this.isJumping) {
+                        this.clampPosition();
+                        if (this.state === 'perched' && this.perchElement) {
+                            this.updatePerchTarget();
+                        }
+                    }
+                });
+            }
+
+            injectStyles() {
+                if (document.getElementById('nz-birds-plugin-css')) return;
+                const style = document.createElement('style');
+                style.id = 'nz-birds-plugin-css';
+                style.textContent = `
+                    /* 3D LAYERING SYSTEM */
+                    #pwk-tree-bg { position: fixed; right: -20px; top: 40%; width: 300px; height: 500px; transform: translateY(-50%); opacity: 0; transition: opacity 0.8s ease; z-index: 999990; pointer-events: none; }
+                    #pwk-container { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 999995; }
+                    #pwk-tree-fg { position: fixed; right: -20px; top: 40%; width: 300px; height: 500px; transform: translateY(-50%); opacity: 0; transition: opacity 0.8s ease; z-index: 999998; pointer-events: none; }
+                    
+                    #pwk-sprite { position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; transform-origin: center center; filter: drop-shadow(0px 8px 10px rgba(0,0,0,0.3)); }
+                    .pwk-svg { width: 100%; height: 100%; overflow: visible; }
+
+                    /* FLIGHT ENGINE */
+                    .state-fluttering .pwk-wing-front { animation: flap-front-3d 0.08s infinite alternate cubic-bezier(0.2, 0.8, 0.4, 1); transform-origin: 55px 50px; }
+                    .state-fluttering .pwk-wing-back { animation: flap-back-3d 0.08s infinite alternate cubic-bezier(0.2, 0.8, 0.4, 1); transform-origin: 55px 50px; }
+                    .state-diving .pwk-wing-front { transform: rotate(70deg) scaleY(0.3) scaleX(0.9); transition: transform 0.15s ease-out; }
+                    .state-diving .pwk-wing-back { transform: rotate(80deg) scaleY(0.3) scaleX(0.9); transition: transform 0.15s ease-out; }
+                    @keyframes flap-front-3d { 0% { transform: rotate(-55deg) scaleY(0.4) skewX(20deg); } 100% { transform: rotate(65deg) scaleY(1.2) skewX(-10deg); } }
+                    @keyframes flap-back-3d { 0% { transform: rotate(-65deg) scaleY(0.4) skewX(20deg); } 100% { transform: rotate(55deg) scaleY(1.1) skewX(-10deg); } }
+
+                    .pwk-legs { transform-origin: 45px 70px; transition: transform 0.2s ease; }
+                    .pwk-fast .pwk-legs { transform: rotate(-65deg) translateY(-8px) scaleY(0.5); }
+
+                    .bird-body { transform-origin: 50px 55px; transition: transform 0.3s ease-in-out; }
+                    .bird-head { transform-origin: 65px 46px; transition: transform 0.3s ease-in-out; }
+                    .pwk-wing-front, .pwk-wing-back { transition: transform 0.3s ease-in-out; }
+                    .pwk-tail-master { transform-origin: 45px 65px; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+                    .state-fluttering .pwk-tail-master { transform: rotate(100deg); }
+                    .state-diving .pwk-tail-master { transform: rotate(90deg); }
+                    .state-fluttering.pwk-fanned .pwk-tail-master { animation: tail-axis-flick 0.25s infinite alternate ease-in-out; }
+                    @keyframes tail-axis-flick { 0% { transform: rotate(90deg); } 100% { transform: rotate(120deg); } }
+                    .pwk-fidget .pwk-tail-master { transform: rotate(95deg) !important; transition: transform 0.05s ease-in; }
+
+                    /* DYNAMIC POSTURES */
+                    .pose-h-alert .pwk-tail-master { transform: rotate(140deg); } .pose-h-alert .bird-head { transform: rotate(-10deg); } .pose-h-alert .bird-body { transform: rotate(-5deg); }
+                    .pose-h-rest .pwk-tail-master { transform: rotate(100deg); } .pose-h-rest .bird-head { transform: rotate(15deg) translate(2px, 2px); } .pose-h-rest .pwk-wing-front { transform: rotate(5deg); }
+                    .pose-h-curious .pwk-tail-master { transform: rotate(130deg); } .pose-h-curious .bird-body { transform: rotate(15deg); } .pose-h-curious .bird-head { transform: rotate(20deg); }
+                    .pose-v-cling .pwk-tail-master { transform: rotate(90deg); } .pose-v-cling .bird-head { transform: rotate(-25deg); } .pose-v-cling .pwk-wing-front { transform: rotate(-15deg) scaleY(1.1); } .pose-v-cling .bird-body { transform: rotate(5deg); }
+
+                    /* THE ULTIMATE STRETCH */
+                    .pose-stretch .pwk-tail-master { transform: rotate(150deg); transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.4, 1); }
+                    .pose-stretch .bird-body { animation: body-stretch 1.2s ease-in-out; }
+                    .pose-stretch .pwk-wing-front, .pose-stretch .pwk-wing-back { animation: wing-stretch 1.2s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 55px 50px; }
+                    @keyframes body-stretch { 20%, 60% { transform: rotate(15deg) translate(5px, 5px); } }
+                    @keyframes wing-stretch {
+                        0% { transform: rotate(0deg) scale(1); }
+                        20% { transform: rotate(-55deg) translateY(-20px) scaleY(1.8) scaleX(1.3); } 
+                        60% { transform: rotate(-55deg) translateY(-20px) scaleY(1.8) scaleX(1.3); } 
+                        70%, 85% { transform: rotate(-45deg) translateY(-15px) scaleY(1.5) scaleX(1.1); } 
+                        75%, 90% { transform: rotate(-60deg) translateY(-18px) scaleY(1.7) scaleX(1.2); }
+                        100% { transform: rotate(0deg) scale(1); }
+                    }
+
+                    /* HEAD BOBBING */
+                    .pwk-head-bob .bird-head { animation: pwk-head-bob-anim 0.3s ease-in-out; }
+                    @keyframes pwk-head-bob-anim { 0%, 100% { transform: rotate(0deg); } 20%, 80% { transform: rotate(20deg) translate(2px, 3px); } }
+
+                    /* TAIL FAN SPREAD */
+                    .pwk-tail-feather { transform-origin: 45px 65px; transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
+                    .pwk-fanned .pwk-tail-l3 { transform: rotate(45deg); } .pwk-fanned .pwk-tail-l2 { transform: rotate(30deg); }
+                    .pwk-fanned .pwk-tail-l1 { transform: rotate(15deg); } .pwk-fanned .pwk-tail-r1 { transform: rotate(-15deg); }
+                    .pwk-fanned .pwk-tail-r2 { transform: rotate(-30deg); } .pwk-fanned .pwk-tail-r3 { transform: rotate(-45deg); }
+                    .pwk-closed .pwk-tail-l3 { transform: rotate(15deg); } .pwk-closed .pwk-tail-l2 { transform: rotate(10deg); }
+                    .pwk-closed .pwk-tail-l1 { transform: rotate(5deg); } .pwk-closed .pwk-tail-r1 { transform: rotate(-5deg); }
+                    .pwk-closed .pwk-tail-r2 { transform: rotate(-10deg); } .pwk-closed .pwk-tail-r3 { transform: rotate(-15deg); }
+                `;
+                document.head.appendChild(style);
+            }
+
+            initDOM() {
+                // 1. PHOTOREALISTIC TREE BACKGROUND
+                this.treeBg = document.createElement('div');
+                this.treeBg.id = 'pwk-tree-bg';
+                this.treeBg.innerHTML = `
+                    <svg viewBox="0 0 300 500" style="width: 100%; height: 100%; filter: drop-shadow(-15px 25px 25px rgba(0,0,0,0.5));">
+                        <defs>
+                            <linearGradient id="barkDark" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#2a1f1a" />
+                                <stop offset="30%" stop-color="#4a372c" />
+                                <stop offset="80%" stop-color="#261b16" />
+                                <stop offset="100%" stop-color="#140e0c" />
+                            </linearGradient>
+                            <radialGradient id="holeDepth" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#000000" />
+                                <stop offset="85%" stop-color="#080504" />
+                                <stop offset="100%" stop-color="#2a1f1a" />
+                            </radialGradient>
+                            <linearGradient id="branchGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#5c4538" />
+                                <stop offset="60%" stop-color="#33251e" />
+                                <stop offset="100%" stop-color="#1a120e" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M 100 0 C 70 150, 90 350, 130 500 L 300 500 L 300 0 Z" fill="url(#barkDark)"/>
+                        <path d="M 120 20 Q 140 100, 130 180 M 135 270 Q 150 350, 140 450 M 150 50 Q 170 200, 160 400" stroke="#120c0a" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        <path d="M 110 50 Q 125 150, 115 220" stroke="#5c4538" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+                        
+                        <path d="M 140 330 C 80 340, 20 300, 0 310 C 30 355, 90 360, 145 355 Z" fill="url(#branchGrad)"/>
+                        <path d="M 10 320 C 40 355, 90 360, 145 355 C 130 350, 60 330, 10 320 Z" fill="#140e0c" opacity="0.8"/>
+                        
+                        <ellipse id="pwk-tree-hole" cx="140" cy="240" rx="30" ry="60" fill="url(#holeDepth)"/>
+                    </svg>
+                    <!-- PERFECTLY PLACED BRANCH TARGET: Extending out away from trunk -->
+                    <div id="pwk-tree-branch-target" style="position:absolute; left: 15px; top: 295px; width: 40px; height: 10px;"></div>
+                `;
+                document.body.appendChild(this.treeBg);
+
+                // 2. BIRD CONTAINER
+                this.container = document.createElement('div');
+                this.container.id = 'pwk-container';
+                this.sprite = document.createElement('div');
+                this.sprite.id = 'pwk-sprite';
+                this.container.appendChild(this.sprite);
+                
+                this.sprite.innerHTML = `
+                    <svg class="pwk-svg" viewBox="0 0 120 120">
+                        <defs>
+                            <linearGradient id="pwkBack" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#554d42" /><stop offset="100%" stop-color="#3d352c" /></linearGradient>
+                            <radialGradient id="pwkBelly" cx="40%" cy="50%" r="60%"><stop offset="0%" stop-color="#e29146" /><stop offset="60%" stop-color="#c16f2c" /><stop offset="100%" stop-color="#8a4f20" /></radialGradient>
+                            <linearGradient id="pwkTailDark" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2b2725" /><stop offset="100%" stop-color="#141211" /></linearGradient>
+                            <linearGradient id="pwkTailWhite" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e8e8e8" /><stop offset="30%" stop-color="#ffffff" /><stop offset="100%" stop-color="#d1d1d1" /></linearGradient>
+                        </defs>
+                        <g class="pwk-tail-master">
+                            <path class="pwk-tail-feather pwk-tail-l3" d="M 45 65 C 38 85, 38 115, 45 120 C 52 115, 52 85, 45 65" fill="url(#pwkTailWhite)" stroke="#b8b8b8" stroke-width="0.5"/>
+                            <path class="pwk-tail-feather pwk-tail-r3" d="M 45 65 C 38 85, 38 115, 45 120 C 52 115, 52 85, 45 65" fill="url(#pwkTailWhite)" stroke="#b8b8b8" stroke-width="0.5"/>
+                            <path class="pwk-tail-feather pwk-tail-l2" d="M 45 65 C 40 85, 40 115, 45 120 C 50 115, 50 85, 45 65" fill="url(#pwkTailWhite)" stroke="#b8b8b8" stroke-width="0.5"/>
+                            <path class="pwk-tail-feather pwk-tail-r2" d="M 45 65 C 40 85, 40 115, 45 120 C 50 115, 50 85, 45 65" fill="url(#pwkTailWhite)" stroke="#b8b8b8" stroke-width="0.5"/>
+                            <path class="pwk-tail-feather pwk-tail-l1" d="M 45 65 C 42 85, 42 115, 45 120 C 48 115, 48 85, 45 65" fill="url(#pwkTailDark)"/>
+                            <path class="pwk-tail-feather pwk-tail-r1" d="M 45 65 C 42 85, 42 115, 45 120 C 48 115, 48 85, 45 65" fill="url(#pwkTailDark)"/>
+                            <path class="pwk-tail-feather pwk-tail-c" d="M 45 65 C 43 85, 43 115, 45 120 C 47 115, 47 85, 45 65" fill="#111"/>
+                        </g>
+                        <path d="M 38 60 Q 45 75 52 60 Z" fill="url(#pwkBack)" />
+                        <g class="pwk-legs">
+                            <path d="M 48 70 L 44 82 L 40 84 M 44 82 L 47 86" stroke="#111" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+                            <path d="M 52 68 L 49 80 L 45 82 M 49 80 L 52 84" stroke="#000" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+                        </g>
+                        <g class="pwk-wing-back" transform-origin="55 50"><path d="M 55 50 C 40 30, 20 60, 35 75 C 45 80, 60 65, 55 50 Z" fill="url(#pwkBack)" /></g>
+                        <g class="bird-body">
+                            <ellipse cx="50" cy="55" rx="16" ry="13" fill="url(#pwkBack)" transform="rotate(-30 50 55)"/>
+                            <path d="M 40 48 C 35 68, 55 75, 65 60 C 60 52, 50 45, 40 48 Z" fill="url(#pwkBelly)"/>
+                        </g>
+                        <g class="bird-head">
+                            <path d="M 55 42 C 60 34, 75 35, 78 46 C 80 55, 70 60, 60 58 Z" fill="#2b2725"/>
+                            <path d="M 66 40 Q 72 38, 77 42" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                            <path d="M 64 52 Q 72 58, 76 50 Q 70 48, 64 52 Z" fill="#fff"/>
+                            <circle cx="72" cy="45" r="2.2" fill="#000"/><circle cx="72.5" cy="44.2" r="0.6" fill="#fff"/> 
+                            <path d="M 77 46 L 85 47 L 77 49 Z" fill="#111"/>
+                        </g>
+                        <g class="pwk-wing-front" transform-origin="55 50">
+                            <path d="M 55 50 C 35 30, 15 65, 40 78 C 50 82, 65 65, 55 50 Z" fill="url(#pwkBack)" />
+                            <path d="M 45 55 C 35 60, 25 70, 40 75 M 40 50 C 30 55, 20 65, 35 70" stroke="#332a24" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                        </g>
+                    </svg>`;
+                document.body.appendChild(this.container);
+
+                // 3. TREE FOREGROUND (Depth Mask)
+                this.treeFg = document.createElement('div');
+                this.treeFg.id = 'pwk-tree-fg';
+                this.treeFg.innerHTML = `
+                    <svg viewBox="0 0 300 500" style="width: 100%; height: 100%;">
+                        <defs>
+                            <linearGradient id="barkLip" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#4a372c" />
+                                <stop offset="100%" stop-color="#140e0c" />
+                            </linearGradient>
+                            <mask id="holeMask">
+                                <rect width="100%" height="100%" fill="white"/>
+                                <ellipse cx="140" cy="240" rx="30" ry="60" fill="black"/>
+                            </mask>
+                        </defs>
+                        <g mask="url(#holeMask)">
+                            <path d="M 100 0 C 70 150, 90 350, 130 500 L 300 500 L 300 0 Z" fill="url(#barkLip)"/>
+                            <path d="M 120 20 Q 140 100, 130 180 M 135 270 Q 150 350, 140 450" stroke="#120c0a" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        </g>
+                        <g filter="drop-shadow(0px 8px 5px rgba(0,0,0,0.6))">
+                            <path d="M 90 -20 C 80 50, 160 100, 200 40 C 230 80, 280 50, 300 -20 Z" fill="#2e4d25"/>
+                            <path d="M 120 -20 C 100 30, 180 60, 220 10 C 240 40, 290 20, 300 -20 Z" fill="#3a5f2d"/>
+                            <path d="M 150 520 C 130 430, 190 400, 230 460 C 260 410, 300 460, 300 520 Z" fill="#2e4d25"/>
+                            <path d="M 150 520 C 130 460, 210 440, 250 490 C 270 450, 300 480, 300 520 Z" fill="#3a5f2d"/>
+                        </g>
+                    </svg>
+                `;
+                document.body.appendChild(this.treeFg);
+            }
+
+            startPlugin() {
+                this.actionIntervalId = setInterval(this.decideNextAction.bind(this), 1500);
+                this.clearPoses(); 
+                this.y = window.innerHeight / 2; 
+                this.takeOff();
+                this.wander();
+            }
+
+            clearPoses() {
+                this.container.classList.remove('pose-h-alert', 'pose-h-rest', 'pose-h-curious', 'pose-h-display', 'pose-v-cling', 'pose-h-clean', 'pose-stretch', 'pwk-fanned', 'pwk-fast');
+                this.currentPose = '';
+            }
+
+            setAnimationState(newState) {
+                this.state = newState;
+                this.container.classList.remove('state-fluttering', 'state-diving');
+                
+                if (newState !== 'flying' && newState !== 'perched' && newState !== 'hidden') {
+                    this.container.classList.add(`state-${newState}`);
+                }
+                
+                if (newState === 'perched') {
+                    this.container.classList.add('state-perched');
+                    this.applyRandomPerchPose();
+                } else {
+                    this.container.classList.remove('state-perched');
+                    this.clearPoses();
+                }
+            }
+
+            applyRandomPerchPose() {
+                if (this.isSequencing) return; 
+                
+                this.clearPoses();
+                if (this.perchSide === 'top') {
+                    const poses = ['pose-h-alert', 'pose-h-rest', 'pose-h-curious', 'pose-h-alert', 'pose-h-display', 'pose-h-clean'];
+                    this.currentPose = poses[Math.floor(Math.random() * poses.length)];
+                    this.container.classList.add(this.currentPose);
+                    
+                    if (this.currentPose === 'pose-h-display' || this.currentPose === 'pose-h-clean') {
+                        this.container.classList.add('pwk-fanned');
+                    } else {
+                        this.container.classList.add('pwk-closed');
+                    }
+                } else {
+                    this.currentPose = 'pose-v-cling';
+                    this.container.classList.add(this.currentPose, 'pwk-fanned');
+                }
+            }
+
+            decideNextAction() {
+                if (this.state === 'hidden' || this.isSequencing || this.isJumping) return;
+                
+                if (this.state === 'perched') {
+                    const rand = Math.random();
+                    if (rand < 0.15) {
+                        this.takeOff();
+                        this.wander();
+                    } else if (rand < 0.35) {
+                        this.hopToNewPerch();
+                    } else {
+                        if (this.perchSide === 'top' && Math.random() < 0.4) {
+                            this.facingRight = !this.facingRight; 
+                        }
+                        
+                        const actionRand = Math.random();
+                        if (actionRand < 0.5) {
+                            if (this.perchSide === 'top' && Math.random() < 0.5) {
+                                this.applyRandomPerchPose();
+                            } else {
+                                this.container.classList.add('pwk-fidget', 'pwk-fanned'); 
+                                this.container.classList.remove('pwk-closed');
+                                setTimeout(() => {
+                                    if (this.state === 'perched' && !this.isSequencing) {
+                                        this.container.classList.remove('pwk-fidget');
+                                        if (this.currentPose !== 'pose-h-display' && this.currentPose !== 'pose-v-cling' && this.currentPose !== 'pose-h-clean') {
+                                            this.container.classList.remove('pwk-fanned'); 
+                                            this.container.classList.add('pwk-closed');
+                                        }
+                                    }
+                                }, 200); 
+                            }
+                        } else if (actionRand < 0.8) {
+                            this.container.classList.add('pwk-head-bob');
+                            setTimeout(() => { this.container.classList.remove('pwk-head-bob'); }, 300);
+                        }
+                    }
+                } else {
+                    if (Math.random() < 0.8) this.seekPerch(); else this.wander();
+                }
+            }
+
+            takeOff() { 
+                this.setAnimationState('flying'); 
+                this.perchElement = null; 
+                this.vy = -10; 
+                this.wander(); 
+            }
+
+            hopToNewPerch() {
+                this.setAnimationState('flying');
+                this.vy = -7; 
+                this.vx = this.facingRight ? 10 : -10;
+                this.seekPerch();
+            }
+
+            scare() {
+                if (this.state === 'hidden' || this.isSequencing) return;
+                this.takeOff();
+                this.vx = this.facingRight ? -25 : 25; 
+                this.wander();
+            }
+
+            // ==========================================
+            // KINEMATIC JUMP & TREE SEQUENCES
+            // ==========================================
+            startKinematicJump(endX, endY, height, duration, callback) {
+                this.isJumping = true;
+                this.jumpStartX = this.x;
+                this.jumpStartY = this.y;
+                this.jumpEndX = endX;
+                this.jumpEndY = endY;
+                this.jumpHeight = height; // Negative arcs UP
+                this.jumpDuration = duration;
+                this.jumpTime = 0;
+                this.jumpCallback = callback;
+                
+                this.setAnimationState('flying');
+                this.container.classList.add('pwk-fanned', 'pwk-closed'); 
+            }
+
+            hideInTree() {
+                if (this.state === 'hidden' || this.isSequencing) return;
+                this.isSequencing = true;
+                
+                this.treeBg.style.opacity = '1';
+                this.treeFg.style.opacity = '1';
+                
+                this.perchElement = document.getElementById('pwk-tree-branch-target');
+                this.perchSide = 'top';
+                this.perchOffset = 20; 
+                this.setAnimationState('flying');
+                this.updatePerchTarget();
+            }
+
+            emergeFromTree() {
+                if (this.state !== 'hidden') return;
+                this.isSequencing = true;
+                
+                this.treeBg.style.opacity = '1';
+                this.treeFg.style.opacity = '1';
+                
+                const hole = document.getElementById('pwk-tree-hole').getBoundingClientRect();
+                const branch = document.getElementById('pwk-tree-branch-target').getBoundingClientRect();
+                
+                this.x = hole.left + hole.width / 2;
+                this.y = hole.top + hole.height / 2 + 30; // Start deep
+                this.container.style.opacity = '1';
+                this.state = 'flying'; 
+                this.facingRight = false; 
+                
+                // Jump OUT of hole onto branch
+                this.startKinematicJump(
+                    branch.left + branch.width / 2, 
+                    branch.top - 22,  
+                    -60, // Arc High
+                    0.5, 
+                    () => {
+                        this.setAnimationState('perched');
+                        this.vx = 0; this.vy = 0;
+                        
+                        // STRETCH SEQUENCE
+                        this.clearPoses();
+                        this.container.classList.add('pose-stretch', 'pwk-fanned');
+                        
+                        setTimeout(() => {
+                            this.isSequencing = false;
+                            this.clearPoses();
+                            this.takeOff();
+                            
+                            setTimeout(() => {
+                                this.treeBg.style.opacity = '0';
+                                this.treeFg.style.opacity = '0';
+                            }, 800);
+                        }, 1200); 
+                    }
+                );
+            }
+
+            // ==========================================
+            // PHYSICS & BOUNDS
+            // ==========================================
+            clampPosition() {
+                if (isNaN(this.x)) this.x = window.innerWidth / 2; if (isNaN(this.y)) this.y = window.innerHeight / 2;
+                this.x = Math.max(60, Math.min(window.innerWidth - 60, this.x));
+                this.y = Math.max(60, Math.min(window.innerHeight - 60, this.y));
+            }
+
+            wander() {
+                const pad = 100; 
+                this.targetX = pad + Math.random() * (window.innerWidth - pad * 2);
+                this.targetY = pad + Math.random() * (window.innerHeight - pad * 2);
+                this.perchElement = null;
+            }
+
+            seekPerch() {
+                if (this.isSequencing) return;
+                
+                const candidates = Array.from(document.querySelectorAll(this.perchSelector)).filter(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0 && 
+                           rect.top > 60 && rect.left > 60 && 
+                           rect.bottom < window.innerHeight - 60 && rect.right < window.innerWidth - 60;
+                });
+
+                if (candidates.length > 0) {
+                    this.perchElement = candidates[Math.floor(Math.random() * candidates.length)];
+                    const rect = this.perchElement.getBoundingClientRect();
+                    const rand = Math.random(); 
+                    this.perchSide = rand < 0.5 ? 'top' : (rand < 0.75 ? 'left' : 'right');
+                    this.perchOffset = Math.random() * (this.perchSide === 'top' ? rect.width : rect.height); 
+                    this.updatePerchTarget();
+                } else this.wander();
+            }
+
+            updatePerchTarget() {
+                if (!this.perchElement) return;
+                const rect = this.perchElement.getBoundingClientRect();
+                
+                // Offset perfectly to rest exact claws on edges
+                if (this.perchSide === 'top') { this.targetX = rect.left + this.perchOffset; this.targetY = rect.top - 22; } 
+                else if (this.perchSide === 'left') { this.targetX = rect.left - 18; this.targetY = rect.top + this.perchOffset; } 
+                else if (this.perchSide === 'right') { this.targetX = rect.right + 18; this.targetY = rect.top + this.perchOffset; }
+            }
+
+            updateTransform() {
+                if (this.state === 'hidden') return;
+                let angle = 0;
+                
+                if (this.state === 'perched') {
+                    if (this.perchSide === 'left') angle = -80; 
+                    else if (this.perchSide === 'right') angle = -80; 
+                } 
+                else if (this.isJumping) {
+                    // Track pitch accurately during the parabola
+                    angle = this.currentVy > 0 ? 60 : -35; 
+                    if (!this.facingRight) angle *= -1;
+                }
+                else {
+                    let velAngle = Math.atan2(this.vy, Math.abs(this.vx)) * (180 / Math.PI);
+                    angle = Math.max(-50, Math.min(70, velAngle)); // Impossible to fall bottom-first
+                    
+                    if (this.container.classList.contains('pwk-fanned') && this.vy > -3) angle = -35; 
+                    else if (this.container.classList.contains('state-diving')) angle = 75; 
+                    
+                    if (!this.facingRight) angle *= -1;
+                }
+
+                if (this.state === 'perched' && this.perchSide === 'right' && !this.facingRight) angle = -80; 
+                else if (this.state === 'perched' && this.perchSide === 'top' && !this.facingRight) angle *= -1; 
+
+                const scaleX = this.facingRight ? 1 : -1;
+                this.container.style.transform = `translate(${this.x}px, ${this.y}px)`;
+                this.sprite.style.transform = `scaleX(${scaleX}) rotate(${angle}deg) scale(0.85)`;
+            }
+
+            update(timestamp) {
+                const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05); 
+                this.lastTime = timestamp; 
+                this.lastY = this.y; // For tracking instantaneous velocity
+
+                if (this.state === 'hidden') {
+                    // Do nothing
+                }
+                else if (this.isJumping) {
+                    this.jumpTime += dt;
+                    let t = Math.min(this.jumpTime / this.jumpDuration, 1.0);
+                    
+                    this.x = this.jumpStartX + (this.jumpEndX - this.jumpStartX) * t;
+                    this.y = this.jumpStartY + (this.jumpEndY - this.jumpStartY) * t + (4 * this.jumpHeight * t * (1 - t));
+                    this.currentVy = this.y - this.lastY; // Used for pitch calculation
+                    
+                    if (t >= 1.0) {
+                        this.isJumping = false;
+                        if (this.jumpCallback) this.jumpCallback();
+                    }
+                }
+                else if (this.state === 'perched' && this.perchElement) {
+                    const rect = this.perchElement.getBoundingClientRect();
+                    if (this.perchSide === 'top') { this.x = rect.left + this.perchOffset; this.y = rect.top - 22; } 
+                    else if (this.perchSide === 'left') { this.x = rect.left - 18; this.y = rect.top + this.perchOffset; } 
+                    else if (this.perchSide === 'right') { this.x = rect.right + 18; this.y = rect.top + this.perchOffset; }
+                    
+                    if (rect.bottom < 60 || rect.top > window.innerHeight - 60) {
+                        this.takeOff();
+                    }
+                } 
+                else {
+                    if (this.perchElement) this.updatePerchTarget();
+                    let dx = this.targetX - this.x; let dy = this.targetY - this.y;
+                    let dist = Math.max(0.1, Math.sqrt(dx*dx + dy*dy));
+
+                    if (this.perchElement && dist < 20) {
+                        
+                        if (this.isSequencing && this.perchElement.id === 'pwk-tree-branch-target') {
+                            this.setAnimationState('perched'); this.vx = 0; this.vy = 0;
+                            this.facingRight = false; 
+                            this.clearPoses();
+                            
+                            // "Coast is Clear" sequence
+                            this.container.classList.add('pose-h-alert', 'pwk-closed');
+                            
+                            setTimeout(() => {
+                                if(!this.isSequencing) return;
+                                this.facingRight = true; 
+                                this.container.classList.remove('pose-h-alert');
+                                this.container.classList.add('pose-h-curious'); // Lean to look
+                                
+                                setTimeout(() => {
+                                    if(!this.isSequencing) return;
+                                    const hole = document.getElementById('pwk-tree-hole').getBoundingClientRect();
+                                    
+                                    this.startKinematicJump(
+                                        hole.left + hole.width / 2, 
+                                        hole.top + hole.height / 2 + 30, // dive deep into hole
+                                        -35, 
+                                        0.4, 
+                                        () => {
+                                            this.state = 'hidden';
+                                            this.container.style.opacity = '0';
+                                            setTimeout(() => {
+                                                this.treeBg.style.opacity = '0';
+                                                this.treeFg.style.opacity = '0';
+                                            }, 500);
+                                        }
+                                    );
+                                }, 500);
+                            }, 600);
+                        } 
+                        else if (!this.isSequencing) {
+                            this.setAnimationState('perched'); this.vx = 0; this.vy = 0;
+                            if (this.perchSide === 'left') this.facingRight = true;
+                            else if (this.perchSide === 'right') this.facingRight = false;
+                            else this.facingRight = this.x < this.perchElement.getBoundingClientRect().left + this.perchElement.getBoundingClientRect().width / 2;
+                            
+                            this.container.classList.remove('pwk-fanned', 'state-fluttering', 'state-diving');
+                            this.container.classList.add('pwk-closed');
+                        }
+                    } else {
+                        let accel = 1.0;
+                        this.vx += (dx / dist) * accel; this.vy += (dy / dist) * accel;
+                        
+                        this.flightTimer += dt * 12; this.vy += Math.sin(this.flightTimer) * 0.8; 
+
+                        this.dartTimer -= dt;
+                        if (this.dartTimer <= 0 && dist > 150 && !this.isSequencing) {
+                            this.dartTimer = 3 + Math.random() * 4; 
+                            this.vx += (Math.random() - 0.5) * 20; this.vy += (Math.random() - 0.5) * 20 - 4; 
+                            this.container.classList.add('pwk-fanned'); this.container.classList.remove('pwk-closed');
+                            setTimeout(() => {
+                                if (this.state === 'flying' && this.vy < 3) {
+                                    this.container.classList.remove('pwk-fanned'); this.container.classList.add('pwk-closed');
+                                }
+                            }, 350);
+                        }
+
+                        this.container.classList.remove('state-diving', 'state-fluttering');
+                        
+                        if (this.perchElement && dist < 150) {
+                            this.container.classList.add('state-fluttering', 'pwk-fanned'); this.container.classList.remove('pwk-closed');
+                            this.vx *= 0.85; this.vy *= 0.85;
+                        } else if (this.vy > 6) {
+                            this.container.classList.add('state-diving', 'pwk-closed'); this.container.classList.remove('pwk-fanned');
+                            this.vy += 0.3; 
+                        } else {
+                            this.container.classList.add('state-fluttering');
+                            let currentAngle = Math.atan2(this.vy, this.vx); let targetAngle = Math.atan2(dy, dx);
+                            let angleDiff = Math.abs(currentAngle - targetAngle); const vel = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                            
+                            if (angleDiff > 1.2 || vel < 5) {
+                                this.container.classList.add('pwk-fanned'); this.container.classList.remove('pwk-closed');
+                            } else if (this.dartTimer < this.dartTimer - 0.35) {
+                                this.container.classList.add('pwk-closed'); this.container.classList.remove('pwk-fanned');
+                            }
+                            
+                            if (vel > 10 && !this.container.classList.contains('state-fluttering')) {
+                                this.container.classList.add('pwk-fast');
+                            } else {
+                                this.container.classList.remove('pwk-fast');
+                            }
+                        }
+                        this.vx *= 0.92; this.vy *= 0.92;
+                        
+                        this.x += this.vx * (dt * 60); this.y += this.vy * (dt * 60);
+                        if (Math.abs(this.vx) > 1.0) this.facingRight = this.vx > 0;
+                    }
+                }
+
+                if (!this.isJumping) this.clampPosition();
+                this.updateTransform();
+                requestAnimationFrame(this.update.bind(this));
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            window.piwakawaka = new PiwakawakaPlugin({ perchSelector: '.bird-perch, nav a, button' });
+
+            const hideBtn = document.getElementById('hide-btn');
+            const showBtn = document.getElementById('show-btn');
+
+            hideBtn.addEventListener('click', () => {
+                window.piwakawaka.hideInTree();
+                hideBtn.classList.add('opacity-50', 'pointer-events-none');
+                setTimeout(() => showBtn.classList.remove('opacity-50', 'pointer-events-none'), 3000);
+            });
+
+            showBtn.addEventListener('click', () => {
+                window.piwakawaka.emergeFromTree();
+                showBtn.classList.add('opacity-50', 'pointer-events-none');
+                setTimeout(() => hideBtn.classList.remove('opacity-50', 'pointer-events-none'), 3000);
+            });
+
+            document.getElementById('scare-btn').addEventListener('click', () => {
+                window.piwakawaka.scare();
+            });
+        });
+    </script>
+</body>
+</html>
